@@ -1,0 +1,84 @@
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Painel do dono</h1>
+    <p class="muted">Escolha o provedor de IA e acompanhe os logs do sistema (armazenados no Redis).</p>
+  </div>
+</section>
+
+@if (message(); as m) {
+  <div class="alert alert-{{ m.kind }}">{{ m.text }}</div>
+}
+
+<section class="card">
+  <div class="card-title"><span>🤖 Provedor de IA</span></div>
+  @if (settings(); as s) {
+    <form class="stack" (ngSubmit)="save()">
+      <div class="provider-options">
+        <label class="provider-option" [class.active]="provider === 'openai'" (click)="provider = 'openai'">
+          <div>
+            <span class="row gap-sm"><input type="radio" name="provider" value="openai" [(ngModel)]="provider" /><strong>OpenAI</strong></span>
+            <span class="badge" [class.badge-off]="!s.openai_configured">{{ s.openai_configured ? 'Chave configurada' : 'Sem OPENAI_API_KEY' }}</span>
+          </div>
+          <input type="text" name="openaiModel" [(ngModel)]="openaiModel" placeholder="Modelo (ex.: gpt-4o-mini)" maxlength="100" />
+        </label>
+        <label class="provider-option" [class.active]="provider === 'gemini'" (click)="provider = 'gemini'">
+          <div>
+            <span class="row gap-sm"><input type="radio" name="provider" value="gemini" [(ngModel)]="provider" /><strong>Google Gemini</strong></span>
+            <span class="badge" [class.badge-off]="!s.gemini_configured">{{ s.gemini_configured ? 'Chave configurada' : 'Sem GEMINI_API_KEY' }}</span>
+          </div>
+          <input type="text" name="geminiModel" [(ngModel)]="geminiModel" placeholder="Modelo (ex.: gemini-3.8-flash)" maxlength="100" />
+        </label>
+      </div>
+      @if ((provider === 'openai' && !s.openai_configured) || (provider === 'gemini' && !s.gemini_configured)) {
+        <div class="alert alert-warning">
+          A chave de API deste provedor não está no <code>.env</code>; as funções de IA ficarão indisponíveis até ela ser configurada.
+        </div>
+      }
+      <div class="button-group">
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Salvando…' : 'Salvar' }}</button>
+      </div>
+    </form>
+  } @else {
+    <div class="spinner"></div>
+  }
+</section>
+
+<section class="card mt-lg">
+  <div class="card-title">
+    <span>📜 Logs (Redis)</span>
+    @if (stats(); as st) {
+      <span class="muted small">{{ st.entries }} / {{ st.max_entries }} entradas em <code>{{ st.stream }}</code></span>
+    }
+  </div>
+  <form class="row gap-sm wrap" (ngSubmit)="loadLogs()">
+    <select name="level" [(ngModel)]="filters.level">
+      <option value="">Todos os níveis</option>
+      <option value="INFO">INFO+</option>
+      <option value="WARNING">WARNING+</option>
+      <option value="ERROR">ERROR+</option>
+    </select>
+    <input class="search" type="search" name="q" [(ngModel)]="filters.q" placeholder="Buscar nos logs…" />
+    <button type="submit" class="btn btn-secondary" [disabled]="logsLoading()">Atualizar</button>
+  </form>
+
+  <div class="log-table">
+    @for (log of logs(); track log.id) {
+      <div class="log-row level-{{ log.level.toLowerCase() }}" (click)="toggle(log.id)">
+        <span class="log-ts">{{ log.ts | date: 'dd/MM HH:mm:ss' }}</span>
+        <span class="log-level">{{ log.level }}</span>
+        <span class="log-msg">{{ log.message }}</span>
+        <span class="log-logger muted">{{ log.logger }}</span>
+      </div>
+      @if (expanded() === log.id) {
+        <pre class="log-details">{{ details(log) | json }}</pre>
+      }
+    } @empty {
+      @if (!logsLoading()) {
+        <p class="muted">Nenhum log encontrado.</p>
+      }
+    }
+  </div>
+  @if (logs().length >= filters.limit) {
+    <button type="button" class="btn btn-ghost mt-sm" (click)="loadLogs(true)" [disabled]="logsLoading()">Carregar mais</button>
+  }
+</section>
