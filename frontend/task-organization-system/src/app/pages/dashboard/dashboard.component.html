@@ -170,12 +170,12 @@
   </section>
 }
 
-<!-- Lista -->
+<!-- Lista em 3 Colunas: Atrasadas (Esquerda), Hoje (Meio), Futuras (Direita) -->
 <section class="events-section">
   <div class="list-toolbar">
-    <h2 class="section-title">Suas tarefas</h2>
+    <h2 class="section-title">Quadro de Atividades</h2>
     <div class="row gap-sm wrap">
-      <input class="search" type="search" placeholder="Buscar…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      <input class="search" type="search" placeholder="Buscar tarefas…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
       <div class="segmented small">
         <label [class.active]="filter() === 'open'"><input type="radio" name="filter" (change)="filter.set('open')" [checked]="filter() === 'open'" />Abertas</label>
         <label [class.active]="filter() === 'all'"><input type="radio" name="filter" (change)="filter.set('all')" [checked]="filter() === 'all'" />Todas</label>
@@ -187,13 +187,251 @@
   @if (loading()) {
     <div class="spinner"></div>
   } @else {
-    @for (group of groups(); track group.key) {
-      <h3 class="group-title" [class.group-alert]="group.key === 'overdue'">
-        {{ group.label }} <span class="count">{{ group.tasks.length }}</span>
-      </h3>
-      <ul class="events-list">
-        @for (task of group.tasks; track task.id) {
-          <li class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
+    <div class="tasks-board">
+      <!-- Coluna 1: Atrasadas (Esquerda) -->
+      <div class="task-column column-overdue">
+        <div class="task-column-header">
+          <div class="task-column-title">
+            <span class="column-dot dot-overdue"></span>
+            <span>Atrasadas</span>
+          </div>
+          <span class="count count-alert">{{ overdueTasks().length }}</span>
+        </div>
+        <div class="task-column-body">
+          @for (task of overdueTasks(); track task.id) {
+            <div class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
+              <label class="check" [title]="task.status === 'done' ? 'Reabrir' : 'Concluir'">
+                <input type="checkbox" [checked]="task.status === 'done'" (change)="toggleDone(task)" />
+                <span></span>
+              </label>
+              <div class="event-content">
+                <div class="event-title">{{ task.title }}</div>
+                <div class="event-meta">
+                  @if (task.start_at) {
+                    <span class="text-danger">
+                      ⚠️ {{ task.start_at | date: 'dd/MM' }}
+                      @if (!task.all_day) { · {{ task.start_at | date: 'HH:mm' }} }
+                    </span>
+                  }
+                  <span class="tag tag-{{ task.priority }}">{{ priorityLabels[task.priority] }}</span>
+                  @if (task.category) {
+                    <span class="tag tag-muted">{{ task.category }}</span>
+                  }
+                  @if (task.google_event_id) {
+                    <span class="tag tag-google" title="Google Agenda">Google</span>
+                  }
+                </div>
+                @if (task.description) {
+                  <div class="event-description line-clamp">{{ task.description }}</div>
+                }
+              </div>
+              <div class="event-actions">
+                <button type="button" class="btn btn-ghost btn-sm" (click)="editTask(task)" title="Editar">✏️</button>
+                <button type="button" class="btn btn-danger btn-sm" (click)="deleteTask(task)" title="Excluir">🗑️</button>
+              </div>
+            </div>
+          } @empty {
+            <div class="task-column-empty">
+              <span>🎉 Nenhuma tarefa atrasada!</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Coluna 2: Hoje (Meio) -->
+      <div class="task-column column-today">
+        <div class="task-column-header">
+          <div class="task-column-title">
+            <span class="column-dot dot-today"></span>
+            <span>Hoje</span>
+          </div>
+          <span class="count count-today">{{ todayTasks().length }}</span>
+        </div>
+        <div class="task-column-body">
+          @for (task of todayTasks(); track task.id) {
+            <div class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
+              <label class="check" [title]="task.status === 'done' ? 'Reabrir' : 'Concluir'">
+                <input type="checkbox" [checked]="task.status === 'done'" (change)="toggleDone(task)" />
+                <span></span>
+              </label>
+              <div class="event-content">
+                <div class="event-title">{{ task.title }}</div>
+                <div class="event-meta">
+                  @if (task.start_at) {
+                    <span>
+                      🕑
+                      @if (task.all_day) {
+                        Dia inteiro
+                      } @else {
+                        {{ task.start_at | date: 'HH:mm' }}
+                        @if (task.end_at) { – {{ task.end_at | date: 'HH:mm' }} }
+                      }
+                    </span>
+                  }
+                  <span class="tag tag-{{ task.priority }}">{{ priorityLabels[task.priority] }}</span>
+                  @if (task.category) {
+                    <span class="tag tag-muted">{{ task.category }}</span>
+                  }
+                  @if (task.google_event_id) {
+                    <span class="tag tag-google" title="Google Agenda">Google</span>
+                  }
+                </div>
+                @if (task.description) {
+                  <div class="event-description line-clamp">{{ task.description }}</div>
+                }
+              </div>
+              <div class="event-actions">
+                <button type="button" class="btn btn-ghost btn-sm" (click)="editTask(task)" title="Editar">✏️</button>
+                <button type="button" class="btn btn-danger btn-sm" (click)="deleteTask(task)" title="Excluir">🗑️</button>
+              </div>
+            </div>
+          } @empty {
+            <div class="task-column-empty">
+              <span>Nenhum compromisso marcado para hoje.</span>
+              <button type="button" class="btn btn-secondary btn-sm mt-xs" (click)="newTask()">+ Criar para hoje</button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Coluna 3: Futuras (Ao lado / Direita) -->
+      <div class="task-column column-future">
+        <div class="task-column-header">
+          <div class="task-column-title">
+            <span class="column-dot dot-future"></span>
+            <span>Futuras</span>
+          </div>
+          <span class="count count-future">{{ futureTasks().length }}</span>
+        </div>
+        <div class="task-column-body">
+          @for (task of futureTasks(); track task.id) {
+            <div class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
+              <label class="check" [title]="task.status === 'done' ? 'Reabrir' : 'Concluir'">
+                <input type="checkbox" [checked]="task.status === 'done'" (change)="toggleDone(task)" />
+                <span></span>
+              </label>
+              <div class="event-content">
+                <div class="event-title">{{ task.title }}</div>
+                <div class="event-meta">
+                  @if (task.start_at) {
+                    <span>
+                      📅 {{ task.start_at | date: 'EEE, dd/MM' }}
+                      @if (!task.all_day) { · {{ task.start_at | date: 'HH:mm' }} }
+                    </span>
+                  } @else {
+                    <span class="tag tag-muted">Sem data</span>
+                  }
+                  <span class="tag tag-{{ task.priority }}">{{ priorityLabels[task.priority] }}</span>
+                  @if (task.category) {
+                    <span class="tag tag-muted">{{ task.category }}</span>
+                  }
+                  @if (task.google_event_id) {
+                    <span class="tag tag-google" title="Google Agenda">Google</span>
+                  }
+                </div>
+                @if (task.description) {
+                  <div class="event-description line-clamp">{{ task.description }}</div>
+                }
+              </div>
+              <div class="event-actions">
+                <button type="button" class="btn btn-ghost btn-sm" (click)="editTask(task)" title="Editar">✏️</button>
+                <button type="button" class="btn btn-danger btn-sm" (click)="deleteTask(task)" title="Excluir">🗑️</button>
+              </div>
+            </div>
+          } @empty {
+            <div class="task-column-empty">
+              <span>Nenhuma tarefa futura agendada.</span>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</section>
+
+<!-- Seção do Calendário Interativo com Agenda -->
+<section class="calendar-section card">
+  <div class="calendar-header">
+    <div class="calendar-title-wrap">
+      <h2 class="section-title">🗓️ Agenda & Calendário</h2>
+      <span class="calendar-month-badge">{{ calendarTitle() }}</span>
+    </div>
+    <div class="calendar-nav">
+      <button type="button" class="btn btn-secondary btn-sm" (click)="prevMonth()" title="Mês anterior">◀ Anterior</button>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="goToday()" title="Ir para o mês atual">Hoje</button>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="nextMonth()" title="Próximo mês">Próximo ▶</button>
+    </div>
+  </div>
+
+  <div class="calendar-container">
+    <div class="calendar-weekdays">
+      @for (w of weekDays; track w) {
+        <div class="calendar-weekday">{{ w }}</div>
+      }
+    </div>
+
+    <div class="calendar-grid">
+      @for (day of calendarGrid(); track day.dateStr) {
+        <div
+          class="calendar-day"
+          [class.is-current-month]="day.isCurrentMonth"
+          [class.is-other-month]="!day.isCurrentMonth"
+          [class.is-today]="day.isToday"
+          [class.is-selected]="day.isSelected"
+          (click)="selectDay(day.date)"
+        >
+          <div class="calendar-day-header">
+            <span class="calendar-day-num" [class.badge-today]="day.isToday">{{ day.dayNumber }}</span>
+            @if (day.tasks.length > 0) {
+              <span class="calendar-task-count">{{ day.tasks.length }}</span>
+            }
+          </div>
+
+          <div class="calendar-day-events">
+            @for (t of day.tasks.slice(0, 3); track t.id) {
+              <div
+                class="calendar-pill priority-pill-{{ t.priority }}"
+                [class.pill-done]="t.status === 'done'"
+                (click)="$event.stopPropagation(); editTask(t)"
+                [title]="t.title + (t.start_at ? ' (' + (t.start_at | date: 'HH:mm') + ')' : '')"
+              >
+                @if (t.start_at && !t.all_day) {
+                  <span class="pill-time">{{ t.start_at | date: 'HH:mm' }}</span>
+                }
+                <span class="pill-title">{{ t.title }}</span>
+              </div>
+            }
+            @if (day.tasks.length > 3) {
+              <span class="calendar-more">+{{ day.tasks.length - 3 }} mais</span>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Detalhes da agenda do dia selecionado -->
+  <div class="calendar-detail">
+    <div class="calendar-detail-header">
+      <div>
+        <h3 class="calendar-detail-title">
+          Compromissos de {{ selectedCalendarDay() | date: 'EEEE, dd/MM/yyyy' }}
+        </h3>
+        <p class="muted small">{{ selectedDayTasks().length }} compromisso(s) para este dia</p>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" (click)="newTaskForDate(selectedCalendarDay())">
+        + Agendar neste dia
+      </button>
+    </div>
+
+    @if (selectedDayTasks().length === 0) {
+      <div class="calendar-detail-empty">
+        <p>Nenhum compromisso marcado para este dia.</p>
+      </div>
+    } @else {
+      <div class="calendar-detail-grid">
+        @for (task of selectedDayTasks(); track task.id) {
+          <div class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
             <label class="check" [title]="task.status === 'done' ? 'Reabrir' : 'Concluir'">
               <input type="checkbox" [checked]="task.status === 'done'" (change)="toggleDone(task)" />
               <span></span>
@@ -205,30 +443,19 @@
                   <span>
                     🕑
                     @if (task.all_day) {
-                      {{ task.start_at | date: 'EEE, dd/MM' }} · dia inteiro
+                      Dia inteiro
                     } @else {
-                      {{ task.start_at | date: 'EEE, dd/MM HH:mm' }}
-                      @if (task.end_at) {
-                        – {{ task.end_at | date: (isSameDay(task.start_at, task.end_at) ? 'HH:mm' : 'dd/MM HH:mm') }}
-                      }
+                      {{ task.start_at | date: 'HH:mm' }}
+                      @if (task.end_at) { – {{ task.end_at | date: 'HH:mm' }} }
                     }
                   </span>
                 }
-                @if (task.estimated_minutes && !task.end_at) {
-                  <span>⏱ {{ task.estimated_minutes }} min</span>
-                }
                 <span class="tag tag-{{ task.priority }}">{{ priorityLabels[task.priority] }}</span>
-                @if (task.status === 'in_progress') {
-                  <span class="tag">Em andamento</span>
-                }
                 @if (task.category) {
                   <span class="tag tag-muted">{{ task.category }}</span>
                 }
                 @if (task.google_event_id) {
-                  <span class="tag tag-google" title="Sincronizada com o Google Agenda">Google</span>
-                }
-                @if (task.sync_error) {
-                  <span class="tag tag-error" [title]="task.sync_error">Erro de sincronização</span>
+                  <span class="tag tag-google">Google</span>
                 }
               </div>
               @if (task.description) {
@@ -239,16 +466,11 @@
               <button type="button" class="btn btn-ghost btn-sm" (click)="editTask(task)">Editar</button>
               <button type="button" class="btn btn-danger btn-sm" (click)="deleteTask(task)">Excluir</button>
             </div>
-          </li>
+          </div>
         }
-      </ul>
-    } @empty {
-      <div class="empty">
-        <p>Nenhuma tarefa por aqui.</p>
-        <button type="button" class="btn btn-primary" (click)="newTask()">Criar a primeira tarefa</button>
       </div>
     }
-  }
+  </div>
 </section>
 
 <!-- Painel de sugestões da IA -->

@@ -133,7 +133,7 @@ export class DashboardComponent implements OnInit {
     };
   });
 
-  readonly groups = computed<TaskGroup[]>(() => {
+  readonly filteredTasks = computed(() => {
     const term = this.search().trim().toLowerCase();
     const filter = this.filter();
     let list = this.tasks();
@@ -144,45 +144,131 @@ export class DashboardComponent implements OnInit {
         [t.title, t.description, t.category ?? ''].some((v) => v.toLowerCase().includes(term)),
       );
     }
+    return list;
+  });
 
+  readonly overdueTasks = computed(() => {
     const today = startOfDay(new Date()).getTime();
-    const day = 24 * 60 * 60 * 1000;
-    const buckets: Record<string, TaskGroup> = {
-      overdue: { key: 'overdue', label: 'Atrasadas', tasks: [] },
-      today: { key: 'today', label: 'Hoje', tasks: [] },
-      tomorrow: { key: 'tomorrow', label: 'Amanhã', tasks: [] },
-      week: { key: 'week', label: 'Próximos 7 dias', tasks: [] },
-      later: { key: 'later', label: 'Mais tarde', tasks: [] },
-      unscheduled: { key: 'unscheduled', label: 'Sem data', tasks: [] },
-      done: { key: 'done', label: 'Concluídas', tasks: [] },
-    };
+    return this.filteredTasks()
+      .filter((t) => t.start_at && startOfDay(new Date(t.start_at)).getTime() < today)
+      .sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''));
+  });
 
-    for (const t of list) {
-      if (t.status === 'done') {
-        buckets['done'].tasks.push(t);
-        continue;
-      }
-      if (!t.start_at) {
-        buckets['unscheduled'].tasks.push(t);
-        continue;
-      }
-      const startDay = startOfDay(new Date(t.start_at)).getTime();
-      if (startDay < today) {
-        buckets['overdue'].tasks.push(t);
-      } else if (startDay === today) {
-        buckets['today'].tasks.push(t);
-      } else if (startDay === today + day) {
-        buckets['tomorrow'].tasks.push(t);
-      } else if (startDay < today + 8 * day) {
-        buckets['week'].tasks.push(t);
-      } else {
-        buckets['later'].tasks.push(t);
-      }
+  readonly todayTasks = computed(() => {
+    const today = startOfDay(new Date()).getTime();
+    return this.filteredTasks()
+      .filter((t) => t.start_at && startOfDay(new Date(t.start_at)).getTime() === today)
+      .sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''));
+  });
+
+  readonly futureTasks = computed(() => {
+    const today = startOfDay(new Date()).getTime();
+    return this.filteredTasks()
+      .filter((t) => !t.start_at || startOfDay(new Date(t.start_at)).getTime() > today)
+      .sort((a, b) => {
+        if (!a.start_at && !b.start_at) return 0;
+        if (!a.start_at) return 1;
+        if (!b.start_at) return -1;
+        return a.start_at.localeCompare(b.start_at);
+      });
+  });
+
+  // ---------- Calendário ----------
+  readonly calendarCurrentDate = signal<Date>(new Date());
+  readonly selectedCalendarDay = signal<Date>(startOfDay(new Date()));
+  readonly weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  readonly calendarTitle = computed(() => {
+    const d = this.calendarCurrentDate();
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    ];
+    return `${months[d.getMonth()]} de ${d.getFullYear()}`;
+  });
+
+  readonly calendarGrid = computed(() => {
+    const current = this.calendarCurrentDate();
+    const year = current.getFullYear();
+    const month = current.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const startWeekDay = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+
+    const todayStr = toDateInput(new Date().toISOString());
+    const selectedStr = toDateInput(this.selectedCalendarDay().toISOString());
+
+    const tasksByDate = new Map<string, Task[]>();
+    for (const t of this.tasks()) {
+      if (!t.start_at) continue;
+      const key = toDateInput(t.start_at);
+      if (!tasksByDate.has(key)) tasksByDate.set(key, []);
+      tasksByDate.get(key)!.push(t);
     }
-    const order = { high: 0, medium: 1, low: 2 } as const;
-    buckets['unscheduled'].tasks.sort((a, b) => order[a.priority] - order[b.priority]);
-    buckets['done'].tasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    return Object.values(buckets).filter((g) => g.tasks.length > 0);
+
+    const grid: {
+      date: Date;
+      dateStr: string;
+      dayNumber: number;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isSelected: boolean;
+      tasks: Task[];
+    }[] = [];
+
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startWeekDay - 1; i >= 0; i--) {
+      const dayNum = prevMonthLastDay - i;
+      const d = new Date(year, month - 1, dayNum);
+      const str = toDateInput(d.toISOString());
+      grid.push({
+        date: d,
+        dateStr: str,
+        dayNumber: dayNum,
+        isCurrentMonth: false,
+        isToday: str === todayStr,
+        isSelected: str === selectedStr,
+        tasks: tasksByDate.get(str) || [],
+      });
+    }
+
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+      const d = new Date(year, month, dayNum);
+      const str = toDateInput(d.toISOString());
+      grid.push({
+        date: d,
+        dateStr: str,
+        dayNumber: dayNum,
+        isCurrentMonth: true,
+        isToday: str === todayStr,
+        isSelected: str === selectedStr,
+        tasks: tasksByDate.get(str) || [],
+      });
+    }
+
+    const remaining = (7 - (grid.length % 7)) % 7;
+    for (let dayNum = 1; dayNum <= remaining; dayNum++) {
+      const d = new Date(year, month + 1, dayNum);
+      const str = toDateInput(d.toISOString());
+      grid.push({
+        date: d,
+        dateStr: str,
+        dayNumber: dayNum,
+        isCurrentMonth: false,
+        isToday: str === todayStr,
+        isSelected: str === selectedStr,
+        tasks: tasksByDate.get(str) || [],
+      });
+    }
+
+    return grid;
+  });
+
+  readonly selectedDayTasks = computed(() => {
+    const selStr = toDateInput(this.selectedCalendarDay().toISOString());
+    return this.tasks().filter((t) => t.start_at && toDateInput(t.start_at) === selStr);
   });
 
   ngOnInit(): void {
@@ -459,5 +545,36 @@ export class DashboardComponent implements OnInit {
   isSameDay(a: string | null, b: string | null): boolean {
     if (!a || !b) return true;
     return new Date(a).toDateString() === new Date(b).toDateString();
+  }
+
+  prevMonth(): void {
+    const d = this.calendarCurrentDate();
+    this.calendarCurrentDate.set(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }
+
+  nextMonth(): void {
+    const d = this.calendarCurrentDate();
+    this.calendarCurrentDate.set(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }
+
+  goToday(): void {
+    const now = new Date();
+    this.calendarCurrentDate.set(new Date(now.getFullYear(), now.getMonth(), 1));
+    this.selectedCalendarDay.set(startOfDay(now));
+  }
+
+  selectDay(d: Date): void {
+    this.selectedCalendarDay.set(startOfDay(d));
+  }
+
+  newTaskForDate(d: Date): void {
+    this.form = emptyForm();
+    this.form.dateMode = 'timed';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    this.form.start = `${dateStr}T09:00`;
+    this.form.end = `${dateStr}T10:00`;
+    this.formOpen.set(true);
+    setTimeout(() => document.getElementById('task-title')?.focus());
   }
 }
