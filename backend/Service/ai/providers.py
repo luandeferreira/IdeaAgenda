@@ -4,6 +4,7 @@ Ambos expõem a mesma interface ``generate_json(system, prompt) -> dict``, de mo
 que o restante do sistema não precisa saber qual provedor o dono escolheu.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -55,18 +56,41 @@ class AIProvider(ABC):
         self._http = http
 
     async def _post(self, url: str, **kwargs) -> dict:
-        try:
-            if self._http is not None:
-                resp = await self._http.post(url, **kwargs)
-            else:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(url, **kwargs)
-        except httpx.HTTPError as exc:
-            raise AIProviderError(f"Falha de comunicação com {self.name}: {exc}") from exc
-        if resp.status_code >= 400:
-            logger.warning("Erro do provedor de IA", extra={"provider": self.name, "status": resp.status_code, "body": resp.text[:500]})
-            raise AIProviderError(f"{self.name} respondeu com erro {resp.status_code}")
-        return resp.json()
+        max_attempts = 3
+        last_resp = None
+        for attempt in range(max_attempts):
+            try:
+                if self._http is not None:
+                    resp = await self._http.post(url, **kwargs)
+                else:
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        resp = await client.post(url, **kwargs)
+            except httpx.HTTPError as exc:
+                if attempt == max_attempts - 1:
+                    raise AIProviderError(f"Falha de comunicação com {self.name}: {exc}") from exc
+                await asyncio.sleep(0.5 * (attempt + 1) if self._http is None else 0.01)
+                continue
+
+            last_resp = resp
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                logger.warning(
+                    f"Tentativa {attempt + 1} de {max_attempts} para {self.name} retornou status {resp.status_code}. Tentando novamente...",
+                    extra={"provider": self.name, "status": resp.status_code},
+                )
+                await asyncio.sleep(1.0 * (attempt + 1) if self._http is None else 0.01)
+                continue
+            break
+
+        if last_resp is None:
+            raise AIProviderError(f"Falha de comunicação com {self.name}")
+
+        if last_resp.status_code >= 400:
+            logger.warning(
+                "Erro do provedor de IA",
+                extra={"provider": self.name, "status": last_resp.status_code, "body": last_resp.text[:500]},
+            )
+            raise AIProviderError(f"{self.name} respondeu com erro {last_resp.status_code}")
+        return last_resp.json()
 
     @abstractmethod
     async def generate_json(self, system: str, prompt: str) -> dict: ...
@@ -98,22 +122,44 @@ class OpenAIProvider(AIProvider):
 class GeminiProvider(AIProvider):
     name = "gemini"
 
+    # Modelos alternativos caso o selecionado sofra com picos de tráfego (503) ou 404
+    FALLBACK_MODELS = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-3.8-flash"]
+
     async def generate_json(self, system: str, prompt: str) -> dict:
-        data = await self._post(
-            f"{self.base_url}/models/{self.model}:generateContent",
-            headers={"x-goog-api-key": self.api_key},
-            json={
-                "systemInstruction": {"parts": [{"text": system}]},
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json", "temperature": 0.4},
-            },
-        )
-        try:
-            parts = data["candidates"][0]["content"]["parts"]
-            content = "".join(p.get("text", "") for p in parts)
-        except (KeyError, IndexError, TypeError) as exc:
-            raise AIProviderError("Resposta inesperada do Gemini") from exc
-        return extract_json(content)
+        models_to_try = [self.model]
+        for m in self.FALLBACK_MODELS:
+            if m != self.model and m not in models_to_try:
+                models_to_try.append(m)
+
+        last_exc: Exception | None = None
+        for model_name in models_to_try:
+            try:
+                data = await self._post(
+                    f"{self.base_url}/models/{model_name}:generateContent",
+                    headers={"x-goog-api-key": self.api_key},
+                    json={
+                        "systemInstruction": {"parts": [{"text": system}]},
+                        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.4},
+                    },
+                )
+                parts = data["candidates"][0]["content"]["parts"]
+                content = "".join(p.get("text", "") for p in parts)
+                return extract_json(content)
+            except (KeyError, IndexError, TypeError) as exc:
+                last_exc = AIProviderError("Resposta inesperada do Gemini")
+                break
+            except AIProviderError as exc:
+                last_exc = exc
+                logger.warning(
+                    f"Modelo {model_name} falhou ({exc}). Tentando modelo alternativo...",
+                    extra={"provider": self.name, "model": model_name, "error": str(exc)},
+                )
+                continue
+
+        if last_exc:
+            raise last_exc
+        raise AIProviderError("Não foi possível obter resposta do Gemini")
 
 
 def build_provider(ai_settings: AISettingsOut, http: httpx.AsyncClient | None = None) -> AIProvider:
