@@ -128,6 +128,16 @@ async def handle_google_callback(db: AsyncSession, code: str, state: str) -> Use
     await db.commit()
     await db.refresh(user)
     logger.info("Login com Google", extra={"event": "login", "user_id": user.id, "method": "google"})
+
+    try:
+        from Service import calendar_service
+        await calendar_service.full_sync(db, user, past_days=365, future_days=180)
+    except Exception as exc:
+        logger.warning(
+            "Falha na sincronização inicial do Google Calendar após login",
+            extra={"user_id": user.id, "error": str(exc)},
+        )
+
     return user
 
 

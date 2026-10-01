@@ -23,10 +23,10 @@ async def calendar_status(user: User = Depends(get_current_user)):
 
 @router.post("/sync", response_model=CalendarSyncResult)
 async def sync(
-    past_days: int = 7, future_days: int = 60, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    past_days: int = 365, future_days: int = 180, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    past_days = max(0, min(past_days, 90))
-    future_days = max(1, min(future_days, 365))
+    past_days = max(0, min(past_days, 730))
+    future_days = max(1, min(future_days, 730))
     try:
         result = await calendar_service.full_sync(db, user, past_days=past_days, future_days=future_days)
     except calendar_service.CalendarError as exc:

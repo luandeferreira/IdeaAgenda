@@ -82,7 +82,7 @@ Acesse **http://localhost:8080**. A documentação da API fica em **http://local
 ## 🤖 IA: OpenAI ou Gemini (escolha do dono)
 
 O dono acessa **Painel do dono → Provedor de IA**, escolhe **OpenAI** ou **Google Gemini** e, opcionalmente, o modelo
-(ex.: `gpt-4o-mini`, `gemini-2.5-flash`). A escolha é salva no banco e vale para todos os usuários na hora, sem reiniciar.
+(ex.: `gpt-4o-mini`, `gemini-3.8-flash`). A escolha é salva no banco e vale para todos os usuários na hora, sem reiniciar.
 As chaves de API ficam apenas no `.env` do servidor — o painel mostra se cada uma está configurada.
 
 Recursos de IA:

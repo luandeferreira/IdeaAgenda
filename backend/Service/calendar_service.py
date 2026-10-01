@@ -172,7 +172,7 @@ async def delete_task_event(task: Task, user: User) -> None:
         logger.warning("Erro ao remover evento do Google", extra={"user_id": user.id, "task_id": task.id, "error": str(exc)})
 
 
-async def full_sync(db: AsyncSession, user: User, past_days: int = 7, future_days: int = 60) -> dict:
+async def full_sync(db: AsyncSession, user: User, past_days: int = 365, future_days: int = 180) -> dict:
     """Sincronização bidirecional.
 
     1. Envia para o Google as tarefas alteradas desde a última sincronização.

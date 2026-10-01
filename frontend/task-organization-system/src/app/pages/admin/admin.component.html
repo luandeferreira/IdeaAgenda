@@ -26,7 +26,7 @@
             <span class="row gap-sm"><input type="radio" name="provider" value="gemini" [(ngModel)]="provider" /><strong>Google Gemini</strong></span>
             <span class="badge" [class.badge-off]="!s.gemini_configured">{{ s.gemini_configured ? 'Chave configurada' : 'Sem GEMINI_API_KEY' }}</span>
           </div>
-          <input type="text" name="geminiModel" [(ngModel)]="geminiModel" placeholder="Modelo (ex.: gemini-2.5-flash)" maxlength="100" />
+          <input type="text" name="geminiModel" [(ngModel)]="geminiModel" placeholder="Modelo (ex.: gemini-3.8-flash)" maxlength="100" />
         </label>
       </div>
       @if ((provider === 'openai' && !s.openai_configured) || (provider === 'gemini' && !s.gemini_configured)) {
