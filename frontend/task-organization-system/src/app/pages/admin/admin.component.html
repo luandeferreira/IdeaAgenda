@@ -14,14 +14,14 @@
   @if (settings(); as s) {
     <form class="stack" (ngSubmit)="save()">
       <div class="provider-options">
-        <label class="provider-option" [class.active]="provider === 'openai'">
+        <label class="provider-option" [class.active]="provider === 'openai'" (click)="provider = 'openai'">
           <div>
             <span class="row gap-sm"><input type="radio" name="provider" value="openai" [(ngModel)]="provider" /><strong>OpenAI</strong></span>
             <span class="badge" [class.badge-off]="!s.openai_configured">{{ s.openai_configured ? 'Chave configurada' : 'Sem OPENAI_API_KEY' }}</span>
           </div>
           <input type="text" name="openaiModel" [(ngModel)]="openaiModel" placeholder="Modelo (ex.: gpt-4o-mini)" maxlength="100" />
         </label>
-        <label class="provider-option" [class.active]="provider === 'gemini'">
+        <label class="provider-option" [class.active]="provider === 'gemini'" (click)="provider = 'gemini'">
           <div>
             <span class="row gap-sm"><input type="radio" name="provider" value="gemini" [(ngModel)]="provider" /><strong>Google Gemini</strong></span>
             <span class="badge" [class.badge-off]="!s.gemini_configured">{{ s.gemini_configured ? 'Chave configurada' : 'Sem GEMINI_API_KEY' }}</span>
