@@ -1,171 +1,35 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-  <meta charset="UTF-8">
-  <title>IdeaAgenda</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="idea-agenda">
-    <div class="container">
-      <div class="header">
-        <h1 class="logo">IdeaAgenda</h1>
-      </div>
-      
-      <!-- Hero Section -->
-      <div class="hero-section">
-        <h3 class="hero-title">Organize seu tempo.<br>Simplifique sua vida.</h3>
-        <p class="hero-subtitle">Gerencie seus compromissos com elegância e simplicidade.</p>
-      </div>
-
-      <!-- Form Section -->
-      <div class="form-section">
-        <form id="form-agenda" class="event-form">
-          <div class="input-group">
-            <input type="text" id="titulo" placeholder="Título do evento" required />
-            <textarea 
-              id="descricao" 
-              placeholder="Descrição" 
-              rows="2"
-            ></textarea>
-            <div class="date-input">
-              <span class="date-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              </span>
-              <input type="date" id="data" required />
-            </div>
-          </div>
-          <div class="button-group">
-            <button type="submit" class="btn btn-primary">
-              <span id="btn-text">Agendar evento</span>
-            </button>
-            <button type="button" id="cancelar" class="btn btn-secondary hidden">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Events Section -->
-      <div class="events-section">
-        <h3 class="section-title">Seus eventos</h3>
-        <ul id="lista-agenda" class="events-list"></ul>
-      </div>
-
-      <!-- Footer -->
-      <footer class="footer">
-        <p>Desenvolvido com <span>♥</span> por você</p>
-      </footer>
-    </div>
-  </div>
-  <div class="github-link">
-    <a href="https://github.com/luanferreiradev/IdeaAgenda" target="_blank" title="Visite o repositório no GitHub">
-      <!-- GitHub icon -->
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="github-icon" viewBox="0 0 16 16">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
-      </svg>
-      <div class="star-container">
-        <!-- Star icon -->
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="star-icon" viewBox="0 0 16 16">
-          <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73L.173 6.765c-.329-.314-.158-.888.283-.95l4.898-.696L7.538.792c.197-.39.73-.39.927 0l2.184 4.327 4.898.696c.441.062.612.636.282.95l-3.522 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"/>
-        </svg>
-        <span id="github-stars">{{ githubStars }}</span>
-      </div>
+<div class="idea-agenda">
+  <header class="topbar">
+    <a routerLink="/" class="brand" aria-label="IdeaAgenda - início">
+      <img src="assets/logo.png" alt="" class="brand-logo" />
+      <span class="logo">IdeaAgenda</span>
     </a>
-  </div>
-  <script>
-    let eventos = JSON.parse(localStorage.getItem('ideaagenda_eventos')) || [
-      { id: 1, titulo: 'Reunião com equipe', descricao: 'Alinhar próximos passos', data: '2025-05-01' },
-      { id: 2, titulo: 'Consulta médica', descricao: 'Check-up anual', data: '2025-05-03' }
-    ];
-    let editando = null;
 
-    function salvarEventos() {
-      localStorage.setItem('ideaagenda_eventos', JSON.stringify(eventos));
+    @if (auth.user(); as user) {
+      <nav class="topbar-nav">
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Tarefas</a>
+        @if (user.is_admin) {
+          <a routerLink="/admin" routerLinkActive="active">Painel do dono</a>
+        }
+        <span class="user-chip" [title]="user.email">
+          @if (user.picture) {
+            <img [src]="user.picture" alt="" referrerpolicy="no-referrer" />
+          } @else {
+            <span class="avatar">{{ (user.name || user.email).charAt(0).toUpperCase() }}</span>
+          }
+          <span class="user-name">{{ user.name || user.email }}</span>
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="auth.logout()">Sair</button>
+      </nav>
     }
+  </header>
 
-    function renderizar() {
-      const lista = document.getElementById('lista-agenda');
-      lista.innerHTML = '';
-      if (eventos.length === 0) {
-        lista.innerHTML = '<li class="text-center text-gray-500">Nenhum evento agendado.</li>';
-        return;
-      }
-      eventos.forEach(item => {
-        const li = document.createElement('li');
-        li.className = "flex flex-col sm:flex-row sm:justify-between sm:items-center border p-2 rounded bg-white shadow";
-        li.innerHTML = `
-          <div>
-            <span class="font-semibold">${item.titulo}</span>
-            <div class="text-sm text-gray-600">${item.data}</div>
-            <div class="text-gray-700">${item.descricao || ''}</div>
-          </div>
-          <div class="flex gap-2 mt-2 sm:mt-0">
-            <button onclick="editar(${item.id})" class="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">Editar</button>
-            <button onclick="excluir(${item.id})" class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Excluir</button>
-          </div>
-        `;
-        lista.appendChild(li);
-      });
-    }
+  <main class="container">
+    <router-outlet />
+  </main>
 
-    document.getElementById('form-agenda').onsubmit = function(e) {
-      e.preventDefault();
-      const titulo = document.getElementById('titulo').value.trim();
-      const descricao = document.getElementById('descricao').value.trim();
-      const data = document.getElementById('data').value;
-      if (!titulo || !data) return;
-      if (editando) {
-        eventos = eventos.map(item => item.id === editando ? { ...item, titulo, descricao, data } : item);
-        editando = null;
-        document.getElementById('cancelar').classList.add('hidden');
-        document.getElementById('btn-text').textContent = 'Agendar evento';
-      } else {
-        eventos.push({ id: Date.now(), titulo, descricao, data });
-      }
-      salvarEventos();
-      this.reset();
-      renderizar();
-    };
-
-    window.editar = function(id) {
-      const item = eventos.find(e => e.id === id);
-      if (!item) return;
-      document.getElementById('titulo').value = item.titulo;
-      document.getElementById('descricao').value = item.descricao;
-      document.getElementById('data').value = item.data;
-      editando = id;
-      document.getElementById('cancelar').classList.remove('hidden');
-      document.getElementById('btn-text').textContent = 'Atualizar evento';
-    };
-
-    window.excluir = function(id) {
-      eventos = eventos.filter(e => e.id !== id);
-      if (editando === id) {
-        editando = null;
-        document.getElementById('form-agenda').reset();
-        document.getElementById('cancelar').classList.add('hidden');
-        document.getElementById('btn-text').textContent = 'Agendar evento';
-      }
-      salvarEventos();
-      renderizar();
-    };
-
-    document.getElementById('cancelar').onclick = function() {
-      editando = null;
-      document.getElementById('form-agenda').reset();
-      this.classList.add('hidden');
-      document.getElementById('btn-text').textContent = 'Agendar evento';
-    };
-
-    function autoResize(textarea) {
-      textarea.style.height = 'auto'; // Redefine a altura
-      textarea.style.height = textarea.scrollHeight + 'px'; // Ajusta para o conteúdo
-    }
-
-    renderizar();
-  </script>
-</body>
-</html>
+  <footer class="footer">
+    <p>IdeaAgenda © {{ year }} · Desenvolvido com <span>♥</span> por Luan Ferreira e João Gabriel</p>
+    <a href="https://github.com/luanferreiradev/IdeaAgenda" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</div>

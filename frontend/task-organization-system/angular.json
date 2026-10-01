@@ -21,7 +21,10 @@
             ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
-              "src/favicon.ico",
+              {
+                "glob": "**/*",
+                "input": "public"
+              },
               "src/assets"
             ],
             "styles": [
@@ -34,7 +37,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
+                  "maximumWarning": "600kB",
                   "maximumError": "1MB"
                 },
                 {
@@ -63,7 +66,10 @@
               "buildTarget": "task-organization-system:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          }
         },
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n"
@@ -77,7 +83,10 @@
             ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
-              "src/favicon.ico",
+              {
+                "glob": "**/*",
+                "input": "public"
+              },
               "src/assets"
             ],
             "styles": [
@@ -88,8 +97,5 @@
         }
       }
     }
-  },
-  "cli": {
-    "analytics": "84bb7f6e-1d04-4f66-bad4-9673ae96415f"
   }
 }

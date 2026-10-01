@@ -1,0 +1,340 @@
+@if (toast(); as t) {
+  <div class="toast toast-{{ t.kind }}" role="status">
+    <span>{{ t.text }}</span>
+    <button type="button" class="icon-btn" (click)="toast.set(null)" aria-label="Fechar">×</button>
+  </div>
+}
+
+<section class="page-head">
+  <div>
+    <h1 class="page-title">Olá, {{ auth.user()?.name || 'tudo bem' }}!</h1>
+    <p class="muted">Organize seu tempo. Simplifique sua vida.</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><strong>{{ stats().open }}</strong><span>abertas</span></div>
+    <div class="stat" [class.stat-alert]="stats().overdue > 0"><strong>{{ stats().overdue }}</strong><span>atrasadas</span></div>
+    <div class="stat"><strong>{{ stats().unscheduled }}</strong><span>sem data</span></div>
+    <div class="stat"><strong>{{ stats().done }}</strong><span>concluídas</span></div>
+  </div>
+</section>
+
+<!-- Barra de ações: IA + Google -->
+<section class="action-grid">
+  <div class="card">
+    <div class="card-title">
+      <span>✨ Adicionar com IA</span>
+      @if (aiInfo(); as ai) {
+        <span class="badge" [class.badge-off]="!ai.available" [title]="ai.model">{{ providerLabel(ai.provider) }}</span>
+      }
+    </div>
+    <form class="inline-form" (ngSubmit)="quickAdd()">
+      <input
+        type="text"
+        name="quick"
+        [(ngModel)]="quickText"
+        placeholder='Ex.: "Reunião com o time sexta às 15h por 1 hora"'
+        [disabled]="parsing() || aiInfo()?.available === false"
+      />
+      <button type="submit" class="btn btn-primary" [disabled]="parsing() || !quickText.trim() || aiInfo()?.available === false">
+        {{ parsing() ? 'Interpretando…' : 'Criar' }}
+      </button>
+    </form>
+    <div class="row gap-sm wrap mt-sm">
+      <button type="button" class="btn btn-secondary" (click)="openAiPanel()" [disabled]="aiInfo()?.available === false">
+        🧠 Organizar minha semana
+      </button>
+      <button type="button" class="btn btn-ghost" (click)="newTask()">+ Nova tarefa manual</button>
+    </div>
+    @if (aiInfo()?.available === false) {
+      <p class="muted small mt-sm">IA indisponível: a chave do provedor escolhido não foi configurada.</p>
+    }
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span>📅 Google Agenda</span>
+      @if (calendar(); as cal) {
+        <span class="badge" [class.badge-off]="!cal.connected">{{ cal.connected ? 'Conectado' : 'Desconectado' }}</span>
+      }
+    </div>
+    @if (calendar(); as cal) {
+      @if (cal.connected) {
+        <p class="muted small">
+          @if (cal.last_sync_at) {
+            Última sincronização: {{ cal.last_sync_at | date: 'dd/MM HH:mm' }}
+          } @else {
+            Ainda não sincronizado.
+          }
+        </p>
+        <div class="row gap-sm wrap">
+          <button type="button" class="btn btn-primary" (click)="syncCalendar()" [disabled]="syncing() || !cal.sync_enabled">
+            {{ syncing() ? 'Sincronizando…' : 'Sincronizar agora' }}
+          </button>
+          <label class="switch">
+            <input type="checkbox" [checked]="cal.sync_enabled" (change)="toggleAutoSync($any($event.target).checked)" />
+            <span>Sincronização ativa</span>
+          </label>
+        </div>
+      } @else if (cal.google_oauth_enabled) {
+        <p class="muted small">Conecte sua conta Google para enviar tarefas com data para a agenda e importar seus eventos.</p>
+        <button type="button" class="btn btn-google" (click)="connectGoogle()">Conectar Google Agenda</button>
+      } @else {
+        <p class="muted small">Integração com Google não configurada no servidor (GOOGLE_CLIENT_ID/SECRET).</p>
+      }
+    }
+  </div>
+</section>
+
+<!-- Formulário -->
+@if (formOpen()) {
+  <section class="form-section">
+    <form class="event-form" (ngSubmit)="saveTask()" #f="ngForm">
+      <div class="card-title">
+        <span>{{ form.id ? 'Editar tarefa' : 'Nova tarefa' }}</span>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="Fechar">×</button>
+      </div>
+      <div class="input-group">
+        <input id="task-title" type="text" name="title" [(ngModel)]="form.title" placeholder="Título da tarefa" required maxlength="300" />
+        <textarea name="description" [(ngModel)]="form.description" placeholder="Descrição" rows="2" maxlength="5000"></textarea>
+
+        <div class="grid-3">
+          <label class="field">
+            <span>Prioridade</span>
+            <select name="priority" [(ngModel)]="form.priority">
+              @for (p of priorities; track p) {
+                <option [value]="p">{{ priorityLabels[p] }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Status</span>
+            <select name="status" [(ngModel)]="form.status">
+              @for (s of statuses; track s) {
+                <option [value]="s">{{ statusLabels[s] }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Categoria</span>
+            <input type="text" name="category" [(ngModel)]="form.category" placeholder="Ex.: Trabalho" maxlength="80" />
+          </label>
+        </div>
+
+        <div class="segmented" role="radiogroup" aria-label="Quando">
+          <label [class.active]="form.dateMode === 'none'"><input type="radio" name="dateMode" value="none" [(ngModel)]="form.dateMode" />Sem data</label>
+          <label [class.active]="form.dateMode === 'timed'"><input type="radio" name="dateMode" value="timed" [(ngModel)]="form.dateMode" />Com horário</label>
+          <label [class.active]="form.dateMode === 'allday'"><input type="radio" name="dateMode" value="allday" [(ngModel)]="form.dateMode" />Dia inteiro</label>
+        </div>
+
+        @if (form.dateMode === 'timed') {
+          <div class="grid-3">
+            <label class="field">
+              <span>Início</span>
+              <input type="datetime-local" name="start" [(ngModel)]="form.start" required />
+            </label>
+            <label class="field">
+              <span>Término (opcional)</span>
+              <input type="datetime-local" name="end" [(ngModel)]="form.end" [min]="form.start" />
+            </label>
+            <label class="field">
+              <span>Duração estimada (min)</span>
+              <input type="number" name="estimated" [(ngModel)]="form.estimated_minutes" min="1" max="1440" />
+            </label>
+          </div>
+        } @else if (form.dateMode === 'allday') {
+          <label class="field">
+            <span>Dia</span>
+            <input type="date" name="day" [(ngModel)]="form.day" required />
+          </label>
+        } @else {
+          <label class="field">
+            <span>Duração estimada (min) — ajuda a IA a encaixar a tarefa na agenda</span>
+            <input type="number" name="estimated" [(ngModel)]="form.estimated_minutes" min="1" max="1440" />
+          </label>
+        }
+
+        @if (form.dateMode !== 'none' && calendar()?.connected) {
+          <label class="switch">
+            <input type="checkbox" name="sync" [(ngModel)]="form.sync_to_calendar" />
+            <span>Sincronizar com o Google Agenda</span>
+          </label>
+        }
+      </div>
+      <div class="button-group">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() || !f.valid">
+          {{ saving() ? 'Salvando…' : form.id ? 'Atualizar tarefa' : 'Agendar tarefa' }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="closeForm()">Cancelar</button>
+      </div>
+    </form>
+  </section>
+}
+
+<!-- Lista -->
+<section class="events-section">
+  <div class="list-toolbar">
+    <h2 class="section-title">Suas tarefas</h2>
+    <div class="row gap-sm wrap">
+      <input class="search" type="search" placeholder="Buscar…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      <div class="segmented small">
+        <label [class.active]="filter() === 'open'"><input type="radio" name="filter" (change)="filter.set('open')" [checked]="filter() === 'open'" />Abertas</label>
+        <label [class.active]="filter() === 'all'"><input type="radio" name="filter" (change)="filter.set('all')" [checked]="filter() === 'all'" />Todas</label>
+        <label [class.active]="filter() === 'done'"><input type="radio" name="filter" (change)="filter.set('done')" [checked]="filter() === 'done'" />Concluídas</label>
+      </div>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="spinner"></div>
+  } @else {
+    @for (group of groups(); track group.key) {
+      <h3 class="group-title" [class.group-alert]="group.key === 'overdue'">
+        {{ group.label }} <span class="count">{{ group.tasks.length }}</span>
+      </h3>
+      <ul class="events-list">
+        @for (task of group.tasks; track task.id) {
+          <li class="event-item priority-{{ task.priority }}" [class.is-done]="task.status === 'done'">
+            <label class="check" [title]="task.status === 'done' ? 'Reabrir' : 'Concluir'">
+              <input type="checkbox" [checked]="task.status === 'done'" (change)="toggleDone(task)" />
+              <span></span>
+            </label>
+            <div class="event-content">
+              <div class="event-title">{{ task.title }}</div>
+              <div class="event-meta">
+                @if (task.start_at) {
+                  <span>
+                    🕑
+                    @if (task.all_day) {
+                      {{ task.start_at | date: 'EEE, dd/MM' }} · dia inteiro
+                    } @else {
+                      {{ task.start_at | date: 'EEE, dd/MM HH:mm' }}
+                      @if (task.end_at) {
+                        – {{ task.end_at | date: (isSameDay(task.start_at, task.end_at) ? 'HH:mm' : 'dd/MM HH:mm') }}
+                      }
+                    }
+                  </span>
+                }
+                @if (task.estimated_minutes && !task.end_at) {
+                  <span>⏱ {{ task.estimated_minutes }} min</span>
+                }
+                <span class="tag tag-{{ task.priority }}">{{ priorityLabels[task.priority] }}</span>
+                @if (task.status === 'in_progress') {
+                  <span class="tag">Em andamento</span>
+                }
+                @if (task.category) {
+                  <span class="tag tag-muted">{{ task.category }}</span>
+                }
+                @if (task.google_event_id) {
+                  <span class="tag tag-google" title="Sincronizada com o Google Agenda">Google</span>
+                }
+                @if (task.sync_error) {
+                  <span class="tag tag-error" [title]="task.sync_error">Erro de sincronização</span>
+                }
+              </div>
+              @if (task.description) {
+                <div class="event-description">{{ task.description }}</div>
+              }
+            </div>
+            <div class="event-actions">
+              <button type="button" class="btn btn-ghost btn-sm" (click)="editTask(task)">Editar</button>
+              <button type="button" class="btn btn-danger btn-sm" (click)="deleteTask(task)">Excluir</button>
+            </div>
+          </li>
+        }
+      </ul>
+    } @empty {
+      <div class="empty">
+        <p>Nenhuma tarefa por aqui.</p>
+        <button type="button" class="btn btn-primary" (click)="newTask()">Criar a primeira tarefa</button>
+      </div>
+    }
+  }
+</section>
+
+<!-- Painel de sugestões da IA -->
+@if (aiPanelOpen()) {
+  <div class="modal-backdrop" (click)="aiPanelOpen.set(false)"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+    <div class="card-title">
+      <span id="ai-title">🧠 Sugestões de organização</span>
+      <button type="button" class="icon-btn" (click)="aiPanelOpen.set(false)" aria-label="Fechar">×</button>
+    </div>
+
+    @if (!aiResult()) {
+      <form class="stack" (ngSubmit)="requestSuggestions()">
+        <p class="muted small">
+          A IA ({{ providerLabel(aiInfo()?.provider) }}) vai propor horários para suas tarefas sem data ou atrasadas,
+          respeitando os compromissos que você já tem.
+        </p>
+        <div class="grid-3">
+          <label class="field">
+            <span>Próximos dias</span>
+            <input type="number" name="horizon" [(ngModel)]="aiRequest.horizon_days" min="1" max="31" />
+          </label>
+          <label class="field">
+            <span>Início do expediente</span>
+            <input type="time" name="ws" [(ngModel)]="aiRequest.work_start" />
+          </label>
+          <label class="field">
+            <span>Fim do expediente</span>
+            <input type="time" name="we" [(ngModel)]="aiRequest.work_end" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Algum objetivo ou restrição? (opcional)</span>
+          <input type="text" name="goal" [(ngModel)]="aiRequest.goal" maxlength="500" placeholder="Ex.: quero as manhãs livres para estudar" />
+        </label>
+        <button type="submit" class="btn btn-primary" [disabled]="aiLoading()">
+          {{ aiLoading() ? 'Pensando…' : 'Gerar sugestões' }}
+        </button>
+      </form>
+    } @else {
+      @let result = aiResult()!;
+      <p class="ai-summary">{{ result.summary }}</p>
+      @if (result.suggestions.length) {
+        <ul class="suggestions">
+          @for (s of result.suggestions; track s.task_id) {
+            <li>
+              <label class="row gap-sm">
+                <input type="checkbox" [checked]="aiSelected().has(s.task_id)" (change)="toggleSuggestion(s.task_id)" />
+                <div>
+                  <strong>{{ s.title }}</strong>
+                  <div class="muted small">
+                    @if (s.start_at) {
+                      {{ s.start_at | date: 'EEE, dd/MM HH:mm' }}@if (s.end_at) { – {{ s.end_at | date: 'HH:mm' }} }
+                    } @else {
+                      sem horário sugerido
+                    }
+                    @if (s.priority) {
+                      · prioridade {{ priorityLabels[s.priority] }}
+                    }
+                  </div>
+                  @if (s.reason) {
+                    <div class="small">{{ s.reason }}</div>
+                  }
+                </div>
+              </label>
+            </li>
+          }
+        </ul>
+      }
+      @if (result.tips.length) {
+        <div class="tips">
+          <strong>Dicas</strong>
+          <ul>
+            @for (tip of result.tips; track $index) {
+              <li>{{ tip }}</li>
+            }
+          </ul>
+        </div>
+      }
+      <p class="muted small">Gerado por {{ providerLabel(result.provider) }} ({{ result.model }}).</p>
+      <div class="button-group">
+        <button type="button" class="btn btn-primary" (click)="applySuggestions()" [disabled]="aiLoading() || aiSelected().size === 0">
+          {{ aiLoading() ? 'Aplicando…' : 'Aplicar selecionadas (' + aiSelected().size + ')' }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="aiResult.set(null)">Gerar novamente</button>
+      </div>
+    }
+  </div>
+}
